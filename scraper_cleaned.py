@@ -68,10 +68,14 @@ def scrape_data(driver, num_pages_to_scrape):
         # Extracting websites
         websites = [a.get('href') for a in soup.find_all('a', class_='zp-link zp_OotKe')
                     if a.get('href') and not a.get('href').startswith('#') and not any(social in a.get('href') for social in ["facebook", "linkedin", "twitter"])]
+        company_names = [get_text_or_default(name.find('a'), "Company not found") for name in soup.find_all('div', class_='zp_J1j17')]
+        websites.extend(["Website not specified"] * (len(company_names) - len(websites)))
         
         # Extracting company LinkedIn links
+        company_names = [get_text_or_default(name.find('a'), "Company not found") for name in soup.find_all('div', class_='zp_J1j17')]
         company_linkedin_list = [a.get('href') for a in soup.find_all('a', class_='zp-link zp_OotKe')
                                  if a.get('href') and "linkedin" in a.get('href') and "company" in a.get('href')]
+        company_linkedin_list.extend(["LinkedIn page not specified"] * (len(company_names) - len(company_linkedin_list)))
         
         # Extracting personal LinkedIn links
         personal_linkedin_list = [a.get('href') for a in soup.find_all('a', class_='zp-link zp_OotKe')
@@ -83,7 +87,8 @@ def scrape_data(driver, num_pages_to_scrape):
         industries_list = [industry.text.strip() for industry in industries if industry is not None]
 
         # Extracting locations
-        locations = [get_text_or_default(location) for location in soup.find_all('span', class_='zp_Y6y8d') if "Australia" in get_text_or_default(location)]
+        locations = soup.find_all('span', class_='zp_Y6y8d')
+        locations_list = [location.text.strip() for location in locations if location is not None and (location.text.strip().endswith(", Australia") or location.text.strip() == "Australia")]
 
         # Extracting job titles
         titles = [get_text_or_default(title) for title in soup.find_all('span', class_='zp_Y6y8d')[::3]]
@@ -102,7 +107,7 @@ def scrape_data(driver, num_pages_to_scrape):
         all_data['Business Name'].extend(company_names)
         all_data['Website'].extend(websites)
         all_data['Niche'].extend(industries_list)
-        all_data['Country'].extend(locations)
+        all_data['Country'].extend(locations_list)
         all_data['First Name'].extend(first_name)
         all_data['Last Name'].extend(last_name)
         all_data['Job Title'].extend(titles)
@@ -112,15 +117,15 @@ def scrape_data(driver, num_pages_to_scrape):
         all_data['Company LinkedIn'].extend(company_linkedin_list)
 
         # PRINT OUT WHAT IS THE LENGHT OF EACH COLUMN TO MAKE SURE THEY ARE THE SAME
-        # for column, data_list in all_data.items():
-        #     print(f"{column}: {len(data_list)}")
+        for column, data_list in all_data.items():
+            print(f"{column}: {len(data_list)}")
 
         if page_num < num_pages_to_scrape:
             try:
+                print(f'Scraping page {page_num}/{num_pages_to_scrape}.')
                 next_page_button = driver.find_element(By.XPATH, '//*[@id="main-app"]/div[2]/div/div/div[2]/div[2]/div/div[2]/div/div/div/div/div/div/div[2]/div/div[4]/div/div/div/div/div[3]/div/div[2]/button[2]')
                 next_page_button.click()
                 time.sleep(3)
-                print(f'Scraping page {page_num}/{num_pages_to_scrape}.')
             except NoSuchElementException:
                 print("No next page button found.")
                 break
