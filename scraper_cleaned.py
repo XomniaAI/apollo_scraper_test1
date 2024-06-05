@@ -39,21 +39,8 @@ def login(driver, email, password, url):
 def get_text_or_default(element, default=''):
     return element.text.strip() if element else default
 
-def scrape_data(driver, num_pages_to_scrape):
+def scrape_data(driver, num_pages_to_scrape, excel_file_path):
     page_num = 0
-    all_data = {
-        'Business Name': [],
-        'Website': [],
-        'Niche': [],
-        'Country': [],
-        'First Name': [],
-        'Last Name': [],
-        'Job Title': [],
-        'Phone number': [],
-        'Personal email': [],
-        'Personal LinkedIn': [],
-        'Company LinkedIn': [],
-    }
 
     print("Starting to scrape! :)")
 
@@ -61,18 +48,32 @@ def scrape_data(driver, num_pages_to_scrape):
         page_num += 1
         soup = BeautifulSoup(driver.page_source, 'html.parser')
 
+        # Initialize the data dictionary for this page
+        page_data = {
+            'Business Name': [],
+            'Website': [],
+            'Niche': [],
+            'Country': [],
+            'First Name': [],
+            'Last Name': [],
+            'Job Title': [],
+            'Phone number': [],
+            'Personal email': [],
+            'Personal LinkedIn': [],
+            'Company LinkedIn': [],
+        }
+
         # Extracting names
         names = [name.text.split(maxsplit=1) for name in soup.find_all('div', class_='zp_xVJ20') if name.find('a')]
         first_name, last_name = zip_longest(*names, fillvalue='')
 
         # Extracting websites
         websites = [a.get('href') for a in soup.find_all('a', class_='zp-link zp_OotKe')
-                    if a.get('href') and not a.get('href').startswith('#') and not any(social in a.get('href') for social in ["facebook", "linkedin", "twitter"])]
+                    if a.get('href') and not a.get('href').startswith('#') and not any(social in a.get('href') for social in ["facebook", "linkedin", "twitter", "apollo", "Facebook"])]
         company_names = [get_text_or_default(name.find('a'), "Company not found") for name in soup.find_all('div', class_='zp_J1j17')]
         websites.extend(["Website not specified"] * (len(company_names) - len(websites)))
         
         # Extracting company LinkedIn links
-        company_names = [get_text_or_default(name.find('a'), "Company not found") for name in soup.find_all('div', class_='zp_J1j17')]
         company_linkedin_list = [a.get('href') for a in soup.find_all('a', class_='zp-link zp_OotKe')
                                  if a.get('href') and "linkedin" in a.get('href') and "company" in a.get('href')]
         company_linkedin_list.extend(["LinkedIn page not specified"] * (len(company_names) - len(company_linkedin_list)))
@@ -104,21 +105,40 @@ def scrape_data(driver, num_pages_to_scrape):
         # Extracting emails
         emails = [get_text_or_default(email.find('a', class_='zp-link zp_OotKe zp_Iu6Pf')) for email in soup.find_all('div', class_='zp_jcL6a')]
 
-        all_data['Business Name'].extend(company_names)
-        all_data['Website'].extend(websites)
-        all_data['Niche'].extend(industries_list)
-        all_data['Country'].extend(locations_list)
-        all_data['First Name'].extend(first_name)
-        all_data['Last Name'].extend(last_name)
-        all_data['Job Title'].extend(titles)
-        all_data['Phone number'].extend(phone_numbers)
-        all_data['Personal email'].extend(emails)
-        all_data['Personal LinkedIn'].extend(personal_linkedin_list)
-        all_data['Company LinkedIn'].extend(company_linkedin_list)
+        page_data['Business Name'].extend(company_names)
+        page_data['Website'].extend(websites)
+        page_data['Niche'].extend(industries_list)
+        page_data['Country'].extend(locations_list)
+        page_data['First Name'].extend(first_name)
+        page_data['Last Name'].extend(last_name)
+        page_data['Job Title'].extend(titles)
+        page_data['Phone number'].extend(phone_numbers)
+        page_data['Personal email'].extend(emails)
+        page_data['Personal LinkedIn'].extend(personal_linkedin_list)
+        page_data['Company LinkedIn'].extend(company_linkedin_list)
 
-        # PRINT OUT WHAT IS THE LENGHT OF EACH COLUMN TO MAKE SURE THEY ARE THE SAME
-        for column, data_list in all_data.items():
+        # PRINT OUT WHAT IS THE LENGTH OF EACH COLUMN TO MAKE SURE THEY ARE THE SAME
+        for column, data_list in page_data.items():
             print(f"{column}: {len(data_list)}")
+
+        # Save the data for this page
+        df = pd.DataFrame(page_data)
+        save_to_excel(df, excel_file_path)
+
+        # Reset page_data to avoid carrying over data to the next page
+        page_data = {
+            'Business Name': [],
+            'Website': [],
+            'Niche': [],
+            'Country': [],
+            'First Name': [],
+            'Last Name': [],
+            'Job Title': [],
+            'Phone number': [],
+            'Personal email': [],
+            'Personal LinkedIn': [],
+            'Company LinkedIn': [],
+        }
 
         if page_num < num_pages_to_scrape:
             try:
@@ -129,9 +149,6 @@ def scrape_data(driver, num_pages_to_scrape):
             except NoSuchElementException:
                 print("No next page button found.")
                 break
-
-    df = pd.DataFrame(all_data)
-    return df
 
 def save_to_excel(df, excel_file_path):
     if os.path.isfile(excel_file_path):
@@ -153,6 +170,7 @@ def remove_duplicates(input_file, output_file):
         print("No duplicate rows found. Data remains unchanged.")
 
 if __name__ == "__main__":
+    # Last page that was scraped: 46 (next one is 47)
     URL = "YOUR APOLLO SAVED LIST LINK"
     user_agents = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.71 Safari/537.36"]
     
@@ -162,12 +180,11 @@ if __name__ == "__main__":
     driver = setup_webdriver(user_agents)
     login(driver, email, password, URL)
 
-    num_pages_to_scrape = 3
-    scraped_data = scrape_data(driver, num_pages_to_scrape)
+    num_pages_to_scrape = 2
+    excel_file_path = 'complete_data_2.xlsx'
+    scrape_data(driver, num_pages_to_scrape, excel_file_path)
 
-    excel_file_path = 'complete_data.xlsx'
-    save_to_excel(scraped_data, excel_file_path)
     driver.quit()
 
-    output_file_path = "output_file.xlsx"
+    output_file_path = "output_file_2.xlsx"
     remove_duplicates(excel_file_path, output_file_path)
