@@ -170,7 +170,6 @@ def remove_duplicates(input_file, output_file):
         print("No duplicate rows found. Data remains unchanged.")
 
 if __name__ == "__main__":
-    # Last page that was scraped: 46 (next one is 47)
     URL = "YOUR APOLLO SAVED LIST LINK"
     user_agents = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.71 Safari/537.36"]
     
