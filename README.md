@@ -37,8 +37,22 @@ This repository contains a Python-based web scraper designed to automate the ext
 
 4. Update the following in the code:
 
-- Your Apollo login credentials (email and password).
+  - Your Apollo login credentials (email and password).
   
-- The Apollo saved list URL you want to scrape.
+  - The Apollo saved list URL you want to scrape.
 
-- The number of pages you want to scrape.
+  - The number of pages you want to scrape.
+
+## How to Use
+
+1. Modify the `scraper.py` file with your Apollo credentials and target URL.
+
+2. Run the script:
+
+   ```bash
+   python main.py
+   ```
+   
+The script will log in to Apollo, scrape the data, and save it to an Excel file (`complete_data.xlsx`). It will also generate a cleaned file with duplicates removed (`output_file.xlsx`).
+
+
