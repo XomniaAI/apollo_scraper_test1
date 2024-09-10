@@ -2,8 +2,7 @@ import os
 import random
 import time
 import pandas as pd
-import re
-from itertools import repeat, zip_longest
+from itertools import zip_longest
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
