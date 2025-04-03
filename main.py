@@ -12,12 +12,14 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+EMAIL = 'APOLLO EMAIL'
+PASSWORD = 'APOLLO PASSWORD'
+URL = "APOLLO SAVED LIST LINK"
+
 class ApolloScraper:
-    def __init__(self, user_agents, email, password, url):
+    def __init__(self, user_agents, url):
         '''Initialize the scraper with user agents, login credentials, and URL.'''
         self.user_agents = user_agents
-        self.email = email
-        self.password = password
         self.url = url
         self.driver = self.setup_webdriver()
 
@@ -26,25 +28,24 @@ class ApolloScraper:
         service = Service()
         options = Options()
         options.add_argument(f"user-agent={random.choice(self.user_agents)}")
-        options.add_argument("--headless")
-        driver = webdriver.Chrome(service=service, options=options)
-        driver.maximize_window()
-        return driver
+        # options.add_argument("--headless")
+        self.driver = webdriver.Chrome(service=service, options=options)
+        self.driver.maximize_window()
+        return self.driver
 
     def login(self):
         '''Perform login to the Apollo website using email and password.'''
         self.driver.get(self.url)
         email_input = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.NAME, 'email')))
-        email_input.send_keys(self.email)
+        email_input.send_keys(EMAIL)
 
         password_input = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.NAME, 'password')))
-        password_input.send_keys(self.password)
+        password_input.send_keys(PASSWORD)
 
-        log_in_button = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable(
-            (By.XPATH, '//*[@id="provider-mounter"]/div/div[2]/div/div[1]/div/div[2]/div/div[2]/div/form/div[4]/button')))
+        log_in_button = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="provider-mounter"]/div/div[2]/div[2]/div[1]/div/div/div/div[2]/div/form/div[4]/button')))
         log_in_button.click()
 
-        time.sleep(5)
+        time.sleep(10)
 
     def get_text_or_default(self, element, default=''):
         '''Helper function to extract text from an element or return default if None.'''
@@ -171,17 +172,13 @@ class ApolloScraper:
 
 
 if __name__ == "__main__":
-    URL = "YOUR APOLLO SAVED LIST LINK"
     user_agents = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.71 Safari/537.36"]
-    
-    email = 'YOUR APOLLO EMAIL'
-    password = 'YOUR APOLLO PASSWORD'
 
-    scraper = ApolloScraper(user_agents, email, password, URL)
+    scraper = ApolloScraper(user_agents, URL)
 
     scraper.login()
 
-    num_pages_to_scrape = 2   # ENTER HOW MANY PAGES YOU WANT TO SCRAPE
+    num_pages_to_scrape = 2
     excel_file_path = 'data.xlsx'
     scraper.scrape_data(num_pages_to_scrape, excel_file_path)
 
