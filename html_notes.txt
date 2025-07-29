@@ -11,3 +11,7 @@ div role="cell" class="zp_egyXf"
 
 -- a job title is always like this:
 class="zp_FEm_X"
+
+-- a company name is always like this:
+class="zp_xvo3G
+full path to it: 

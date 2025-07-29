@@ -438,31 +438,55 @@ class ApolloScraper:
             return "Unknown Name"
     
     def _extract_job_title_from_cell(self, job_title_cell):
-        """Extract job title from the job title cell using the exact pattern."""
+        """Extract job title from the job title cell, prioritizing NEW values when changes exist."""
         try:
-            # Pattern: span.zp_FEm_X
-            title_element = job_title_cell.select_one('span.zp_FEm_X')
-            if title_element:
-                job_title = title_element.get_text().strip()
-                return job_title if job_title else "Unknown Title"
-            else:
-                print("    ⚠️  Job title element not found")
-                return "Unknown Title"
+            # PRIORITY 1: Check for NEW job title (when person changed jobs)
+            # Pattern: span.zp_pMqXp span.zp_xvo3G (the updated value)
+            new_title_element = job_title_cell.select_one('span.zp_pMqXp span.zp_xvo3G')
+            if new_title_element:
+                new_job_title = new_title_element.get_text().strip()
+                if new_job_title:
+                    print(f"    🔄 Found NEW job title: {new_job_title}")
+                    return new_job_title
+            
+            # FALLBACK: Original extraction logic (when no changes)
+            # Pattern: span.zp_FEm_X (original job title)
+            original_title_element = job_title_cell.select_one('span.zp_FEm_X')
+            if original_title_element:
+                job_title = original_title_element.get_text().strip()
+                if job_title:
+                    return job_title
+                
+            print("    ⚠️  No job title element found")
+            return "Unknown Title"
+            
         except Exception as e:
             print(f"    ⚠️  Error extracting job title: {e}")
             return "Unknown Title"
-    
+
     def _extract_company_from_cell(self, company_cell):
-        """Extract company from the company cell using the exact pattern."""
+        """Extract company from the company cell, prioritizing NEW values when changes exist."""
         try:
-            # Pattern: span.zp_xvo3G
-            company_element = company_cell.select_one('span.zp_xvo3G')
-            if company_element:
-                company = company_element.get_text().strip()
-                return company if company else "Unknown Company"
-            else:
-                print("    ⚠️  Company element not found")
-                return "Unknown Company"
+            # PRIORITY 1: Check for NEW company (when person changed companies)
+            # Pattern: span.zp_pMqXp span.zp_xvo3G (the updated value)
+            new_company_element = company_cell.select_one('span.zp_pMqXp span.zp_xvo3G')
+            if new_company_element:
+                new_company = new_company_element.get_text().strip()
+                if new_company:
+                    print(f"    🔄 Found NEW company: {new_company}")
+                    return new_company
+            
+            # FALLBACK: Original extraction logic (when no changes)
+            # Pattern: span.zp_xvo3G (original company)
+            original_company_element = company_cell.select_one('span.zp_xvo3G')
+            if original_company_element:
+                company = original_company_element.get_text().strip()
+                if company:
+                    return company
+                    
+            print("    ⚠️  Company element not found")
+            return "Unknown Company"
+            
         except Exception as e:
             print(f"    ⚠️  Error extracting company: {e}")
             return "Unknown Company"
