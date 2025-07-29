@@ -390,7 +390,9 @@ class ApolloScraper:
         job_titles = []
         companies = []
         
-        for idx, person_row in enumerate(person_rows, 1):            
+        for idx, person_row in enumerate(person_rows, 1):
+            print(f"🔍 Processing person {idx}...")
+            
             # Get all cells, but exclude the checkbox cell (has zp_xk8LG class)
             all_cells = person_row.find_all('div', {'role': 'cell', 'class': 'zp_egyXf'})
             data_cells = [cell for cell in all_cells if 'zp_xk8LG' not in cell.get('class', [])]
@@ -528,39 +530,155 @@ class ApolloScraper:
         try:
             print(f'Navigating from page {current_page} to page {current_page + 1}...')
             
-            time.sleep(3)  # Wait for page to fully load
+            # Wait a bit for page to fully load
+            time.sleep(2)
+            
+            # Try multiple strategies to find the next page button
             success = False
             
-            # Strategy 1: WORKING SELECTOR - aria-label="Next" (discovered from logs)
+            # Strategy 1: Right arrow (from online function)
             try:
-                next_page_button = self.driver.find_element(By.CSS_SELECTOR, 'button[aria-label="Next"]')
-                next_page_button.click()
-                print("✅ Strategy 1 (aria-label='Next') worked!")
-                time.sleep(2)
-                success = True
+                next_page_button = self.driver.find_element(By.CSS_SELECTOR, "[aria-label='right-arrow']")
+                if next_page_button:
+                    next_page_button.click()
+                    print("✅ Strategy 1 (right-arrow) clicked - waiting for page to load...")
+                    
+                    # Use WebDriverWait to properly wait for page load (from online function)
+                    try:
+                        WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-cy-loaded='true']")))
+                        print("✅ Strategy 1 (right-arrow) worked - page loaded!")
+                        success = True
+                    except:
+                        # Fallback: just wait a bit if the data-cy-loaded selector doesn't exist
+                        time.sleep(3)
+                        print("✅ Strategy 1 (right-arrow) worked - using fallback wait!")
+                        success = True
+                else:
+                    print("❌ Strategy 1 (right-arrow) button not found")
             except Exception as e:
-                print(f"❌ Strategy 1 (aria-label='Next') failed: {e}")
+                print(f"❌ Strategy 1 (right-arrow) failed: {e}")
             
             if not success:
-                # Strategy 2: More specific selector with class
+                # Strategy 2: Original working XPATH
                 try:
-                    next_page_button = self.driver.find_element(By.CSS_SELECTOR, 'button[aria-label="Next"].zp_NbJqo.zp_hgBYR')
+                    next_page_button = self.driver.find_element(By.XPATH, '//*[@id="main-app"]/div[2]/div/div/div[2]/div[2]/div/div[2]/div/div/div/div/div/div/div[2]/div/div[4]/div/div/div/div/div[3]/div/div[2]/button[2]')
                     next_page_button.click()
-                    print("✅ Strategy 2 (specific Next button with classes) worked!")
+                    print("✅ Strategy 2 (original XPATH) worked!")
                     time.sleep(3)
                     success = True
                 except Exception as e:
-                    print(f"❌ Strategy 2 (specific Next button with classes) failed: {e}")
+                    print(f"❌ Strategy 2 (original XPATH) failed: {e}")
+            
+            if not success:
+                # Strategy 3: CSS selector for next page button
+                try:
+                    next_button = self.driver.find_element(By.CSS_SELECTOR, 'button[aria-label="Next page"]')
+                    next_button.click()
+                    print("✅ Strategy 3 (CSS aria-label) worked!")
+                    time.sleep(3)
+                    success = True
+                except Exception as e:
+                    print(f"❌ Strategy 3 (CSS aria-label) failed: {e}")
+            
+            if not success:
+                # Strategy 4: Look for any button containing "Next" or ">"
+                try:
+                    next_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Next') or contains(text(), '>')]")
+                    if next_buttons:
+                        next_buttons[0].click()
+                        print("✅ Strategy 4 (text contains Next/>) worked!")
+                        time.sleep(3)
+                        success = True
+                    else:
+                        print("❌ Strategy 4 (text contains Next/>) found no buttons")
+                except Exception as e:
+                    print(f"❌ Strategy 4 (text contains Next/>) failed: {e}")
+            
+            if not success:
+                # Strategy 5: Look for pagination buttons
+                try:
+                    pagination_buttons = self.driver.find_elements(By.CSS_SELECTOR, 'button[data-testid*="pagination"], button[class*="next"], button[class*="pagination"]')
+                    if pagination_buttons:
+                        # Try the last button (usually next)
+                        pagination_buttons[-1].click()
+                        print("✅ Strategy 5 (pagination buttons) worked!")
+                        time.sleep(3)
+                        success = True
+                    else:
+                        print("❌ Strategy 5 (pagination buttons) found no buttons")
+                except Exception as e:
+                    print(f"❌ Strategy 5 (pagination buttons) failed: {e}")
+            
+            if not success:
+                # Strategy 6: Debug - find all buttons and analyze them
+                print("🔍 DEBUG: Analyzing all buttons on the page...")
+                
+                # Take screenshot for debugging
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                debug_screenshot = f"extracted_data/debug_navigation_page_{current_page}_{timestamp}.png"
+                self.driver.save_screenshot(debug_screenshot)
+                print(f"📸 Debug screenshot saved: {debug_screenshot}")
+                
+                # Save page source for analysis
+                debug_html = f"extracted_data/debug_navigation_page_{current_page}_{timestamp}.html"
+                with open(debug_html, "w", encoding="utf-8") as f:
+                    f.write(self.driver.page_source)
+                print(f"💾 Debug HTML saved: {debug_html}")
+                
+                # Find all buttons and log their attributes
+                all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                print(f"🔍 Found {len(all_buttons)} buttons on the page")
+                
+                button_info = []
+                for i, button in enumerate(all_buttons):
+                    try:
+                        text = button.text.strip()
+                        aria_label = button.get_attribute("aria-label") or ""
+                        class_name = button.get_attribute("class") or ""
+                        data_testid = button.get_attribute("data-testid") or ""
+                        
+                        # Focus on potentially relevant buttons
+                        if any(keyword in (text + aria_label + class_name + data_testid).lower() 
+                               for keyword in ['next', 'page', '>', 'pagination', 'forward', 'arrow', 'right']):
+                            button_info.append(f"Button {i}: text='{text}', aria-label='{aria_label}', class='{class_name}', data-testid='{data_testid}'")
+                    except:
+                        pass
+                
+                print("🔍 Potentially relevant buttons found:")
+                for info in button_info[:10]:  # Show first 10
+                    print(f"  {info}")
+                
+                # Try clicking any button that looks like next
+                for i, button in enumerate(all_buttons):
+                    try:
+                        text = button.text.strip()
+                        aria_label = button.get_attribute("aria-label") or ""
+                        
+                        if ("next" in (text + aria_label).lower() or 
+                            text == ">" or 
+                            "next page" in aria_label.lower() or
+                            "right" in aria_label.lower() or
+                            "arrow" in aria_label.lower()):
+                            print(f"🎯 Trying to click button {i}: '{text}' (aria-label: '{aria_label}')")
+                            button.click()
+                            print("✅ Strategy 6 (debug analysis) worked!")
+                            time.sleep(3)
+                            success = True
+                            break
+                    except Exception as e:
+                        continue
+                
+                if not success:
+                    print("❌ All strategies failed - no next page button found")
+                    print("🏁 Reached the last page or pagination not available")
+                    return False
             
             if success:
                 print(f"✅ STEP 7 COMPLETED: Successfully navigated to page {current_page + 1}")
                 return True
-            else:
-                print("❌ All strategies failed")
-                return False
-            
+                
         except Exception as e:
-            print(f"❌ STEP 7 FAILED: {e}")
+            print(f"❌ STEP 7 FAILED with unexpected error: {e}")
             return False
 
     # MAIN ORCHESTRATOR: Run all steps in sequence
