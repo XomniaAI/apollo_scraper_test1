@@ -1,0 +1,13 @@
+notes!!
+
+Level with a person info: 
+class="zp_Uiy0R"
+
+--a definition of the 'row'
+div class="zp_biVWr zp_wDB4y" 
+
+--all cells in a row are defined with it:
+div role="cell" class="zp_egyXf" 
+
+-- a job title is always like this:
+class="zp_FEm_X"

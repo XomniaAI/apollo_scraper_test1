@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import random
 import time
@@ -39,17 +40,47 @@ class ApolloScraper:
 
     def login(self):
         '''Perform login to the Apollo website using email and password.'''
-        self.driver.get(self.url)
-        email_input = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.NAME, 'email')))
-        email_input.send_keys(EMAIL)
-
-        password_input = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.NAME, 'password')))
-        password_input.send_keys(PASSWORD)
-
-        log_in_button = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="provider-mounter"]/div/div[2]/div[2]/div[1]/div/div/div/div[2]/div/form/div[4]/button')))
-        log_in_button.click()
-
-        time.sleep(12)
+        print("🔄 Navigating to Apollo login page...")
+        
+        # Go directly to login page first (like colleague's solution)
+        self.driver.get("https://app.apollo.io/#/login")
+        time.sleep(5)  # Wait for page to load
+        
+        print("📧 Entering credentials...")
+        
+        # Use colleague's simple approach - direct CSS selectors, no clear()
+        try:
+            # Enter email
+            email_input = self.driver.find_element(By.CSS_SELECTOR, 'input[name="email"]')
+            email_input.send_keys(EMAIL)
+            print(f"✅ Email entered: {EMAIL}")
+            
+            # Enter password  
+            password_input = self.driver.find_element(By.CSS_SELECTOR, 'input[name="password"]')
+            password_input.send_keys(PASSWORD)
+            print("✅ Password entered")
+            
+            # Click login button
+            login_button = self.driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
+            login_button.click()
+            print("✅ Login button clicked")
+            
+            print("⏳ Logging in, please wait for Apollo to load after login...")
+            time.sleep(10)  # Wait for login to complete
+            
+            # Now navigate to the actual search page
+            print("🔄 Navigating to search results page...")
+            self.driver.get(URL)  # Use the search URL from .env
+            time.sleep(7)  # Wait for results to load
+            
+            print("✅ Successfully logged in and navigated to search page!")
+            
+        except Exception as e:
+            print(f"❌ Login failed: {e}")
+            print("🔍 Taking screenshot for debugging...")
+            self.driver.save_screenshot("debug_login_error.png")
+            print("📸 Screenshot saved as 'debug_login_error.png'")
+            raise
 
     def get_text_or_default(self, element, default=''):
         '''Helper function to extract text from an element or return default if None.'''
@@ -67,45 +98,19 @@ class ApolloScraper:
 
             # Initialize the data dictionary for this page
             page_data = {
-                'Business Name': [],
-                'Website': [],
-                'Niche': [],
-                'Country': [],
-                'First Name': [],
-                'Last Name': [],
+                'Full Name': [],
                 'Job Title': [],
-                'Phone number': [],
-                'Personal email': [],
-                'Personal LinkedIn': [],
-                'Company LinkedIn': [],
+                'Company': []
             }
 
             # Extracting names
-            names = [name.text.split(maxsplit=1) for name in soup.find_all('div', class_='zp_xVJ20') if name.find('a')]
-            first_name, last_name = zip_longest(*names, fillvalue='')
-
-            # Extracting websites
-            websites = [a.get('href') for a in soup.find_all('a', class_='zp-link zp_OotKe')
-                        if a.get('href') and not a.get('href').startswith('#') and not any(social in a.get('href') for social in ["facebook", "linkedin", "twitter", "apollo", "Facebook"])]
-            company_names = [self.get_text_or_default(name.find('a'), "Company not found") for name in soup.find_all('div', class_='zp_J1j17')]
-            websites.extend(["Website not specified"] * (len(company_names) - len(websites)))
-            
-            # Extracting company LinkedIn links
-            company_linkedin_list = [a.get('href') for a in soup.find_all('a', class_='zp-link zp_OotKe')
-                                     if a.get('href') and "linkedin" in a.get('href') and "company" in a.get('href')]
-            company_linkedin_list.extend(["LinkedIn page not specified"] * (len(company_names) - len(company_linkedin_list)))
-            
-            # Extracting personal LinkedIn links
-            personal_linkedin_list = [a.get('href') for a in soup.find_all('a', class_='zp-link zp_OotKe')
-                                      if a.get('href') and "linkedin" in a.get('href') and "company" not in a.get('href')]
-
-            # Extracting industries
-            industries = soup.find_all('span', class_='zp_PHqgZ zp_TNdhR')[:25]
-            industries_list = [industry.text.strip() for industry in industries if industry is not None]
-
-            # Extracting locations
-            locations = soup.find_all('span', class_='zp_Y6y8d')
-            locations_list = [location.text.strip() for location in locations if location is not None and (location.text.strip().endswith(", Australia") or location.text.strip() == "Australia")]
+            name_elements = soup.select('div[data-testid="contact-name-cell"] a')
+            full_names = []
+            for name_elem in name_elements:
+                full_name = name_elem.get_text().strip()
+                if full_name:
+                    full_names.append(full_name)
+                    
 
             # Extracting job titles
             titles = [self.get_text_or_default(title) for title in soup.find_all('span', class_='zp_Y6y8d')[::3]]
@@ -113,27 +118,11 @@ class ApolloScraper:
             # Extracting company names
             company_names = [self.get_text_or_default(name.find('a'), "Company not found") for name in soup.find_all('div', class_='zp_J1j17')]
 
-            # Extracting phone numbers
-            phone_numbers = soup.find_all('span', class_='zp_lm1kV')
-            phone_numbers_clean = [phone.find('a') for phone in phone_numbers]
-            phone_numbers = [phone.text.strip() for phone in phone_numbers_clean if phone is not None]
-
-            # Extracting emails
-            emails = [self.get_text_or_default(email.find('a', class_='zp-link zp_OotKe zp_Iu6Pf')) for email in soup.find_all('div', class_='zp_jcL6a')]
-
             # Storing the scraped data in the dictionary
-            page_data['Business Name'].extend(company_names)
-            page_data['Website'].extend(websites)
-            page_data['Niche'].extend(industries_list)
-            page_data['Country'].extend(locations_list)
-            page_data['First Name'].extend(first_name)
-            page_data['Last Name'].extend(last_name)
+            page_data['Full Name'].extend(full_names)
             page_data['Job Title'].extend(titles)
-            page_data['Phone number'].extend(phone_numbers)
-            page_data['Personal email'].extend(emails)
-            page_data['Personal LinkedIn'].extend(personal_linkedin_list)
-            page_data['Company LinkedIn'].extend(company_linkedin_list)
-
+            page_data['Company'].extend(company_names)
+            
             # Save the data for this page
             df = pd.DataFrame(page_data)
             self.save_to_excel(df, excel_file_path)
@@ -183,10 +172,12 @@ if __name__ == "__main__":
     scraper.login()
 
     num_pages_to_scrape = int(os.getenv('PAGES_TO_SCRAPE', 5))  # Convert to int with fallback
-    excel_file_path = "data.xlsx"
+    
+    # Generate timestamp for unique filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    excel_file_path = f"data_{timestamp}.csv"
+    
     scraper.scrape_data(num_pages_to_scrape, excel_file_path)
 
     scraper.quit()
 
-    output_file_path = "cleaned_data.xlsx"
-    scraper.remove_duplicates(excel_file_path, output_file_path)
