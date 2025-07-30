@@ -376,33 +376,154 @@ class ApolloScraper:
         print(f"✅ STEP 4 COMPLETED: Found {len(person_rows)} person rows to process")
         return person_rows
 
-    # STEP 5: Extract contact data from person rows (completely rewritten)
+    # STEP 4.5: Reveal ALL hidden emails by clicking all buttons at once (IMPROVED APPROACH)
+    def step4_5_reveal_all_hidden_emails(self, page_num):
+        '''STEP 4.5: Click ALL hidden email buttons at once, then wait for all emails to load.
+        
+        Input: page_num (int) - current page number for logging
+        Output: success (bool) - whether email revealing completed successfully
+        '''
+        print(f"\n🔄 STEP 4.5: Revealing ALL Hidden Emails (Batch Approach)")
+        print("=" * 50)
+        
+        emails_clicked = 0
+        emails_already_visible = 0
+        total_email_buttons = 0
+        
+        try:
+            # Strategy 1: Find ALL email buttons in one pass (most reliable)
+            print("🔍 Finding all email buttons on the page...")
+            
+            # Find all buttons containing "Access email" text
+            all_email_buttons = self.driver.find_elements(By.XPATH, "//button[.//span[contains(text(), 'Access email')]]")
+            print(f"📧 Found {len(all_email_buttons)} 'Access email' buttons")
+            
+            # Also find by alternative method for missed buttons
+            alt_email_buttons = self.driver.find_elements(By.XPATH, "//span[contains(text(), 'Access email')]/ancestor::button[1]")
+            print(f"📧 Found {len(alt_email_buttons)} alternative email buttons")
+            
+            # Combine and deduplicate buttons
+            all_buttons = list(set(all_email_buttons + alt_email_buttons))
+            total_email_buttons = len(all_buttons)
+            print(f"📧 Total unique email buttons found: {total_email_buttons}")
+            
+            # Check for already visible emails
+            visible_emails = self.driver.find_elements(By.CSS_SELECTOR, "span.zp_xvo3G.zp_JTaUA")
+            emails_already_visible = len(visible_emails)
+            print(f"✅ Already visible emails: {emails_already_visible}")
+            
+            if total_email_buttons == 0:
+                print("ℹ️  No hidden email buttons found on this page")
+                return True
+            
+            # BATCH CLICK ALL BUTTONS (SLOWER, MORE HUMAN-LIKE)
+            print(f"🔓 Clicking ALL {total_email_buttons} email buttons with human-like timing...")
+            
+            for i, button in enumerate(all_buttons, 1):
+                try:
+                    # Test if button is still valid
+                    _ = button.tag_name
+                    
+                    # Scroll button into view slowly
+                    self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", button)
+                    
+                    # Human-like delay before clicking (much longer)
+                    self.human_like_delay(0.8, 1.5)
+                    
+                    # Add mouse movement simulation before clicking
+                    self.simulate_human_behavior()
+                    
+                    # Click using JavaScript (most reliable)
+                    self.driver.execute_script("arguments[0].click();", button)
+                    emails_clicked += 1
+                    
+                    print(f"  🔓 Clicked button {i}/{total_email_buttons}")
+                    
+                    # MUCH longer delay between clicks (2-4 seconds instead of 0.2)
+                    self.human_like_delay(2, 4)
+                    
+                    # Every 5 clicks, take a longer break to look more human
+                    if i % 5 == 0:
+                        print(f"    ⏸️  Taking natural break after {i} clicks...")
+                        self.human_like_delay(3, 6)
+                        self.simulate_human_behavior()
+                    
+                except Exception as e:
+                    print(f"  ⚠️  Failed to click button {i}: {e}")
+                    # Even on failure, add a delay to maintain human-like rhythm
+                    self.human_like_delay(1, 2)
+                    continue
+            
+            print(f"📧 Batch clicking completed: {emails_clicked}/{total_email_buttons} buttons clicked")
+            
+            # LONGER COMPREHENSIVE WAIT for ALL emails to load
+            if emails_clicked > 0:
+                print("⏳ Waiting for ALL emails to load (extended comprehensive wait)...")
+                time.sleep(8)  # Increased from 4 to 8 seconds for slower loading
+                
+                # Verify emails are loading by checking for more visible emails
+                time.sleep(2)  # Additional buffer time
+                final_visible_emails = self.driver.find_elements(By.CSS_SELECTOR, "span.zp_xvo3G.zp_JTaUA")
+                newly_revealed = len(final_visible_emails) - emails_already_visible
+                print(f"✅ Email loading complete: {newly_revealed} new emails revealed")
+            
+            print(f"✅ STEP 4.5 COMPLETED: {emails_clicked} clicked, {emails_already_visible} already visible")
+            return True
+            
+        except Exception as e:
+            print(f"❌ STEP 4.5 FAILED: {e}")
+            return False
+
+    # STEP 4.6: Re-create soup with revealed emails
+    def step4_6_recreate_soup_with_emails(self, page_num):
+        '''STEP 4.6: Re-create BeautifulSoup object after emails have been revealed.
+        
+        Input: page_num (int) - current page number for logging
+        Output: soup (BeautifulSoup) - fresh parsed HTML with revealed emails
+        '''
+        print(f"\n🔄 STEP 4.6: Re-creating Soup with Revealed Emails")
+        print("=" * 50)
+        
+        # Get fresh HTML source with revealed emails
+        fresh_html = self.driver.page_source
+        fresh_soup = BeautifulSoup(fresh_html, 'html.parser')
+        
+        # Verify we still have person rows
+        person_rows = fresh_soup.find_all('div', {'class': 'zp_Uiy0R', 'role': 'row'})
+        print(f"🔍 Fresh soup contains {len(person_rows)} person rows")
+        
+        print(f"✅ STEP 4.6 COMPLETED: Fresh soup created with revealed emails")
+        return fresh_soup
+
+    # STEP 5: Extract contact data from person rows (updated for emails)
     def step5_extract_contact_data(self, person_rows):
-        '''STEP 5: Extract names, job titles, and companies from person rows.
+        '''STEP 5: Extract names, job titles, companies, and emails from person rows.
         
         Input: person_rows (list) - list of BeautifulSoup elements for each person
-        Output: contact_data (dict) - extracted contact information
+        Output: contact_data (dict) - extracted contact information including emails
         '''
-        print(f"\n🔄 STEP 5: Extracting Contact Data from {len(person_rows)} person rows")
+        print(f"\n🔄 STEP 5: Extracting Contact Data with Emails from {len(person_rows)} person rows")
         print("=" * 50)
         
         names = []
         job_titles = []
         companies = []
+        emails = []
         
         for idx, person_row in enumerate(person_rows, 1):            
             # Get all cells, but exclude the checkbox cell (has zp_xk8LG class)
             all_cells = person_row.find_all('div', {'role': 'cell', 'class': 'zp_egyXf'})
             data_cells = [cell for cell in all_cells if 'zp_xk8LG' not in cell.get('class', [])]
             
-            if len(data_cells) < 3:
+            if len(data_cells) < 4:
                 print(f"  ⚠️  Person {idx}: Only {len(data_cells)} data cells found, skipping")
                 continue
             
-            # Extract data from the first 3 cells
+            # Extract data from the first 4 cells
             name_cell = data_cells[0]
             job_title_cell = data_cells[1] 
             company_cell = data_cells[2]
+            email_cell = data_cells[3]  # NEW: Email cell
             
             # Extract name from first cell
             name = self._extract_name_from_cell(name_cell)
@@ -415,11 +536,17 @@ class ApolloScraper:
             # Extract company from third cell
             company = self._extract_company_from_cell(company_cell)
             companies.append(company)
+            
+            # Extract email from fourth cell
+            email = self._extract_email_from_cell(email_cell)
+            emails.append(email)
+            
+            print(f"  ✅ Person {idx}: {name} | {job_title} | {company} | {email}")
         
-        # Create structured contact data
-        contact_data = self._create_structured_data(names, job_titles, companies)
+        # Create structured contact data including emails
+        contact_data = self._create_structured_data(names, job_titles, companies, emails)
         
-        print(f"✅ STEP 5 COMPLETED: Extracted data for {len(names)} contacts")
+        print(f"✅ STEP 5 COMPLETED: Extracted data for {len(names)} contacts with emails")
         return contact_data
 
     def _extract_name_from_cell(self, name_cell):
@@ -490,11 +617,42 @@ class ApolloScraper:
         except Exception as e:
             print(f"    ⚠️  Error extracting company: {e}")
             return "Unknown Company"
+
+    def _extract_email_from_cell(self, email_cell):
+        """Extract email from the email cell using the exact pattern."""
+        try:
+            # Look for visible email with pattern: zp_xvo3G zp_JTaUA
+            visible_email = email_cell.find('span', class_=lambda x: x and 'zp_xvo3G' in x and 'zp_JTaUA' in x)
+            
+            if visible_email:
+                email_text = visible_email.get_text(strip=True)
+                if email_text and '@' in email_text:
+                    return email_text
+            
+            # Check if there's still a hidden email button (shouldn't happen after revealing)
+            hidden_button = email_cell.find('button', string=lambda text: text and 'Access email' in text)
+            if hidden_button:
+                return "Email not revealed"
+            
+            # Check for any other email patterns
+            all_text = email_cell.get_text(strip=True)
+            if '@' in all_text:
+                # Try to extract email from the text
+                import re
+                email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+                matches = re.findall(email_pattern, all_text)
+                if matches:
+                    return matches[0]
+            
+            return "No email found"
+            
+        except Exception as e:
+            return f"Error extracting email: {e}"
     
-    def _create_structured_data(self, names, job_titles, companies):
+    def _create_structured_data(self, names, job_titles, companies, emails):
    
         # Determine max length
-        max_length = max(len(names), len(job_titles), len(companies))
+        max_length = max(len(names), len(job_titles), len(companies), len(emails))
         
         if max_length == 0:
             print("⚠️  No contact data found!")
@@ -504,12 +662,14 @@ class ApolloScraper:
         names.extend([''] * (max_length - len(names)))
         job_titles.extend([''] * (max_length - len(job_titles)))
         companies.extend([''] * (max_length - len(companies)))
+        emails.extend([''] * (max_length - len(emails)))
         
         # Create structured data
         contact_data = {
             'Full Name': names,
             'Job Title': job_titles,
-            'Company': companies
+            'Company': companies,
+            'Email': emails
         }
         
         return contact_data
@@ -595,6 +755,15 @@ class ApolloScraper:
             try:
                 # STEP 3: Get raw HTML and create BeautifulSoup object
                 soup = self.create_soup(page_num)
+                
+                # STEP 4: Extract person rows from the soup
+                person_rows = self.step4_extract_person_rows(soup, page_num)
+                
+                # STEP 4.5: Reveal ALL hidden emails by clicking all buttons at once (IMPROVED APPROACH)
+                self.step4_5_reveal_all_hidden_emails(page_num)
+                
+                # STEP 4.6: Re-create soup with revealed emails
+                soup = self.step4_6_recreate_soup_with_emails(page_num)
                 
                 # STEP 4: Extract person rows from the soup
                 person_rows = self.step4_extract_person_rows(soup, page_num)
