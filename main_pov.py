@@ -196,7 +196,7 @@ class ApolloScraper:
         driver.maximize_window()
         return driver
 
-    def human_like_delay(self, min_delay=1, max_delay=3):
+    def human_like_delay(self, min_delay=0.7, max_delay=2):
         '''Add human-like random delays'''
         delay = random.uniform(min_delay, max_delay)
         time.sleep(delay)
@@ -216,8 +216,8 @@ class ApolloScraper:
         """, random.randint(100, 500), random.randint(100, 500))
         
         # Random scroll
-        #self.driver.execute_script(f"window.scrollTo(0, {random.randint(100, 300)});")
-        #self.human_like_delay(0.5, 1.5)
+        self.driver.execute_script(f"window.scrollTo(0, {random.randint(100, 300)});")
+        self.human_like_delay(0.3, 1.5)
 
     # STEPS 1 & 2: Login and navigate to search page
     def step1_and_2_login_and_navigate(self):
@@ -311,7 +311,7 @@ class ApolloScraper:
                 wait_time = 0
                 
                 while wait_time < max_wait:
-                    self.human_like_delay(2, 4)
+                    self.human_like_delay(1, 4)
                     wait_time += 3
                     
                     # Check if challenge is resolved
@@ -405,26 +405,26 @@ class ApolloScraper:
             
             # STEP 2: COMBINE AND DEDUPLICATE ALL BUTTONS (PRESERVE ORDER)
             # OLD PROBLEM: list(set(...)) destroys order!
-            # all_buttons = list(set(all_email_buttons + alt_email_buttons))
+            all_buttons = list(set(all_email_buttons + alt_email_buttons))
             
-            # NEW: Deduplicate while preserving order, then sort by position
-            seen = set()
-            deduplicated_buttons = []
-            for button in all_email_buttons + alt_email_buttons:
-                button_id = id(button)  # Use object ID for deduplication
-                if button_id not in seen:
-                    seen.add(button_id)
-                    deduplicated_buttons.append(button)
+            ##--- NEW: Deduplicate while preserving order, then sort by position
+            # seen = set()
+            # deduplicated_buttons = []
+            # for button in all_email_buttons + alt_email_buttons:
+            #     button_id = id(button)  # Use object ID for deduplication
+            #     if button_id not in seen:
+            #         seen.add(button_id)
+            #         deduplicated_buttons.append(button)
             
-            # SORT BUTTONS BY Y POSITION (TOP TO BOTTOM)
-            print(f"📍 Sorting {len(deduplicated_buttons)} buttons by position (top to bottom)...")
-            try:
-                # Sort buttons by their Y coordinate on the page
-                all_buttons = sorted(deduplicated_buttons, key=lambda btn: btn.location['y'])
-                print(f"✅ Buttons sorted successfully by Y position")
-            except Exception as e:
-                print(f"⚠️  Could not sort by position ({e}), using original order")
-                all_buttons = deduplicated_buttons
+            # # SORT BUTTONS BY Y POSITION (TOP TO BOTTOM)
+            # print(f"📍 Sorting {len(deduplicated_buttons)} buttons by position (top to bottom)...")
+            # try:
+            #     # Sort buttons by their Y coordinate on the page
+            #     all_buttons = sorted(deduplicated_buttons, key=lambda btn: btn.location['y'])
+            #     print(f"✅ Buttons sorted successfully by Y position")
+            # except Exception as e:
+            #     print(f"⚠️  Could not sort by position ({e}), using original order")
+            #     all_buttons = deduplicated_buttons
             ##---  new logic for buttons 'sorting' ends here --- ##
             
             total_email_buttons = len(all_buttons)
@@ -468,7 +468,7 @@ class ApolloScraper:
                     # Every 5 clicks, take a longer break to look more human
                     if i % 5 == 0:
                         print(f"    ⏸️  Taking natural break after {i} clicks...")
-                        self.human_like_delay(1, 3)
+                        self.human_like_delay(1, 2)
                         self.simulate_human_behavior()
                     
                 except Exception as e:
@@ -483,7 +483,7 @@ class ApolloScraper:
                 time.sleep(4)  # Longer wait for all emails to fully load
                 
                 # Verify emails are loading by checking for more visible emails
-                time.sleep(1)
+                time.sleep(0.5)
                 final_visible_emails = self.driver.find_elements(By.CSS_SELECTOR, "span.zp_xvo3G.zp_JTaUA")
                 newly_revealed = len(final_visible_emails) - emails_already_visible
                 print(f"✅ Email loading complete: {newly_revealed} new emails revealed")
@@ -787,7 +787,7 @@ class ApolloScraper:
                     next_page_button = self.driver.find_element(By.CSS_SELECTOR, 'button[aria-label="Next"].zp_NbJqo.zp_hgBYR')
                     next_page_button.click()
                     print("✅ Strategy 2 (specific Next button with classes) worked!")
-                    time.sleep(3)
+                    time.sleep(2)
                     success = True
                 except Exception as e:
                     print(f"❌ Strategy 2 (specific Next button with classes) failed: {e}")
@@ -815,6 +815,7 @@ class ApolloScraper:
         
         suggestions_found = 0
         suggestions_accepted = 0
+        page_reloaded = False
         
         try:
             # Find all update containers indicating job changes (both classes must be present)
@@ -853,10 +854,16 @@ class ApolloScraper:
                         # STEP 3: Handle second popup (Warning dialog)
                         if self._handle_second_job_change_popup(i):
                             suggestions_accepted += 1
+                            page_reloaded = True  # Mark that page will reload
                             print(f"    ✅ Successfully accepted suggestion {i}")
                             
                             # Longer delay after completing full suggestion acceptance
                             self.human_like_delay(2, 4)
+                            
+                            # IMPORTANT: Break after first successful acceptance
+                            # because page will reload and all other elements become stale
+                            print(f"    🔄 Page will reload after job change - stopping processing")
+                            break
                         else:
                             print(f"    ❌ Failed to handle second popup for suggestion {i}")
                     else:
@@ -866,6 +873,11 @@ class ApolloScraper:
                     print(f"    ❌ Error processing suggestion {i}: {e}")
                     continue
             
+            # STEP 4: Handle page recovery if changes were accepted
+            if page_reloaded:
+                print(f"🔄 Handling page recovery after job change acceptance...")
+                self._recover_page_after_job_changes(page_num)
+            
             print(f"📊 Job change suggestions processed: {suggestions_accepted}/{suggestions_found} accepted")
             print(f"✅ STEP 4.4 COMPLETED: Job change suggestions handled")
             return True
@@ -873,6 +885,31 @@ class ApolloScraper:
         except Exception as e:
             print(f"❌ STEP 4.4 FAILED: {e}")
             return False
+    
+    def _recover_page_after_job_changes(self, page_num):
+        """Handle page recovery after job changes cause a reload."""
+        try:
+            print(f"  🔄 Waiting for page to stabilize after job change...")
+            
+            # Wait for page to fully reload and stabilize
+            self.human_like_delay(3, 4)
+            
+            # Check if we're still on the same page by looking for person rows
+            time.sleep(1)  # Additional stability wait
+            
+            # Verify page state
+            person_rows_check = self.driver.find_elements(By.CSS_SELECTOR, 'div.zp_Uiy0R[role="row"]')
+            print(f"  📊 Page recovery check: {len(person_rows_check)} person rows found")
+            
+            if len(person_rows_check) == 0:
+                print(f"  ⚠️  Page appears empty after job change - this is expected behavior")
+                print(f"  ℹ️  The accepted job change updated the page content")
+            else:
+                print(f"  ✅ Page recovered successfully with {len(person_rows_check)} person rows")
+            
+        except Exception as e:
+            print(f"  ⚠️  Page recovery warning: {e}")
+            print(f"  ℹ️  Continuing with workflow...")
     
     def _handle_first_job_change_popup(self, suggestion_num):
         """Handle the first popup (Update Contact form) that appears after clicking accept."""
@@ -931,6 +968,25 @@ class ApolloScraper:
                 
                 # STEP 4.4: Accept job change suggestions BEFORE email clicking
                 self.step4_4_accept_job_change_suggestions(page_num)
+                
+                # STEP 4.5: Re-check page state after potential job change reload
+                print(f"\n🔄 Re-checking page state after job change processing...")
+                fresh_person_rows_check = self.driver.find_elements(By.CSS_SELECTOR, 'div.zp_Uiy0R[role="row"]')
+                print(f"📊 Current page state: {len(fresh_person_rows_check)} person rows")
+                
+                if len(fresh_person_rows_check) == 0:
+                    print(f"⚠️  Page appears empty after job changes - skipping to next page")
+                    print(f"ℹ️  This is normal behavior when job changes reload the page")
+                    
+                    # Navigate to next page if not the last page
+                    if page_num < num_pages_to_scrape:
+                        nav_success = self.step7_navigate_to_next_page(page_num)
+                        if not nav_success:
+                            print(f"⚠️  Cannot navigate further. Stopping at page {page_num}")
+                            break
+                    
+                    print(f"✅ PAGE {page_num} COMPLETED (skipped due to job change reload)")
+                    continue
                 
                 # STEP 4.5: Reveal ALL hidden emails by clicking all buttons at once (IMPROVED APPROACH)
                 self.step4_5_reveal_all_hidden_emails(page_num)
@@ -1024,4 +1080,4 @@ if __name__ == "__main__":
                 print("❌ All bypass methods failed!")
             else:
                 print(f"🔄 Trying next method...")
-                time.sleep(5)  # Wait before trying next method
+                time.sleep(4)  # Wait before trying next method
