@@ -216,8 +216,8 @@ class ApolloScraper:
         """, random.randint(100, 500), random.randint(100, 500))
         
         # Random scroll
-        self.driver.execute_script(f"window.scrollTo(0, {random.randint(100, 300)});")
-        self.human_like_delay(0.5, 1.5)
+        #self.driver.execute_script(f"window.scrollTo(0, {random.randint(100, 300)});")
+        #self.human_like_delay(0.5, 1.5)
 
     # STEPS 1 & 2: Login and navigate to search page
     def step1_and_2_login_and_navigate(self):
@@ -391,10 +391,11 @@ class ApolloScraper:
         total_email_buttons = 0
         
         try:
-            # Strategy 1: Find ALL email buttons in one pass (most reliable)
+            # STEP 1: FIND ALL EMAIL BUTTONS AT ONCE (NOT RANDOM SCROLLING)
             print("🔍 Finding all email buttons on the page...")
             
-            # Find all buttons containing "Access email" text
+            # APPROACH: Find ALL buttons in one pass, then click sequentially
+            # NOt Random scrolling or finding "closest" buttons
             all_email_buttons = self.driver.find_elements(By.XPATH, "//button[.//span[contains(text(), 'Access email')]]")
             print(f"📧 Found {len(all_email_buttons)} 'Access email' buttons")
             
@@ -402,10 +403,32 @@ class ApolloScraper:
             alt_email_buttons = self.driver.find_elements(By.XPATH, "//span[contains(text(), 'Access email')]/ancestor::button[1]")
             print(f"📧 Found {len(alt_email_buttons)} alternative email buttons")
             
-            # Combine and deduplicate buttons
-            all_buttons = list(set(all_email_buttons + alt_email_buttons))
+            # STEP 2: COMBINE AND DEDUPLICATE ALL BUTTONS (PRESERVE ORDER)
+            # OLD PROBLEM: list(set(...)) destroys order!
+            # all_buttons = list(set(all_email_buttons + alt_email_buttons))
+            
+            # NEW: Deduplicate while preserving order, then sort by position
+            seen = set()
+            deduplicated_buttons = []
+            for button in all_email_buttons + alt_email_buttons:
+                button_id = id(button)  # Use object ID for deduplication
+                if button_id not in seen:
+                    seen.add(button_id)
+                    deduplicated_buttons.append(button)
+            
+            # SORT BUTTONS BY Y POSITION (TOP TO BOTTOM)
+            print(f"📍 Sorting {len(deduplicated_buttons)} buttons by position (top to bottom)...")
+            try:
+                # Sort buttons by their Y coordinate on the page
+                all_buttons = sorted(deduplicated_buttons, key=lambda btn: btn.location['y'])
+                print(f"✅ Buttons sorted successfully by Y position")
+            except Exception as e:
+                print(f"⚠️  Could not sort by position ({e}), using original order")
+                all_buttons = deduplicated_buttons
+            ##---  new logic for buttons 'sorting' ends here --- ##
+            
             total_email_buttons = len(all_buttons)
-            print(f"📧 Total unique email buttons found: {total_email_buttons}")
+            print(f"📧 Total unique email buttons (top to bottom): {total_email_buttons}")
             
             # Check for already visible emails
             visible_emails = self.driver.find_elements(By.CSS_SELECTOR, "span.zp_xvo3G.zp_JTaUA")
@@ -416,53 +439,51 @@ class ApolloScraper:
                 print("ℹ️  No hidden email buttons found on this page")
                 return True
             
-            # BATCH CLICK ALL BUTTONS (SLOWER, MORE HUMAN-LIKE)
-            print(f"🔓 Clicking ALL {total_email_buttons} email buttons with human-like timing...")
+            # STEP 3: CLICK BUTTONS SEQUENTIALLY (NOT RANDOMLY OR BY PROXIMITY)
+            # NOTE: This is where scrolling happens - for EACH button individually
+            print(f"🔓 Clicking ALL {total_email_buttons} email buttons in batch...")
             
             for i, button in enumerate(all_buttons, 1):
                 try:
                     # Test if button is still valid
                     _ = button.tag_name
                     
-                    # Scroll button into view slowly
+                    # SCROLL TO CURRENT BUTTON (Sequential, not random)
+                    # This scrolls to each button in the order we found them
                     self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", button)
                     
                     # Human-like delay before clicking (much longer)
-                    self.human_like_delay(0.8, 1.5)
+                    self.human_like_delay(0.2, 0.7)
                     
                     # Add mouse movement simulation before clicking
                     self.simulate_human_behavior()
                     
-                    # Click using JavaScript (most reliable)
+                    # CLICK THE CURRENT BUTTON (Sequential order, not closest)
                     self.driver.execute_script("arguments[0].click();", button)
                     emails_clicked += 1
                     
-                    print(f"  🔓 Clicked button {i}/{total_email_buttons}")
-                    
                     # MUCH longer delay between clicks (2-4 seconds instead of 0.2)
-                    self.human_like_delay(2, 4)
+                    self.human_like_delay(0.2, 1.2)
                     
                     # Every 5 clicks, take a longer break to look more human
                     if i % 5 == 0:
                         print(f"    ⏸️  Taking natural break after {i} clicks...")
-                        self.human_like_delay(3, 6)
+                        self.human_like_delay(1, 3)
                         self.simulate_human_behavior()
                     
                 except Exception as e:
                     print(f"  ⚠️  Failed to click button {i}: {e}")
-                    # Even on failure, add a delay to maintain human-like rhythm
-                    self.human_like_delay(1, 2)
                     continue
             
             print(f"📧 Batch clicking completed: {emails_clicked}/{total_email_buttons} buttons clicked")
             
-            # LONGER COMPREHENSIVE WAIT for ALL emails to load
+            # SINGLE COMPREHENSIVE WAIT for ALL emails to load
             if emails_clicked > 0:
-                print("⏳ Waiting for ALL emails to load (extended comprehensive wait)...")
-                time.sleep(8)  # Increased from 4 to 8 seconds for slower loading
+                print("⏳ Waiting for ALL emails to load (comprehensive wait)...")
+                time.sleep(4)  # Longer wait for all emails to fully load
                 
                 # Verify emails are loading by checking for more visible emails
-                time.sleep(2)  # Additional buffer time
+                time.sleep(1)
                 final_visible_emails = self.driver.find_elements(By.CSS_SELECTOR, "span.zp_xvo3G.zp_JTaUA")
                 newly_revealed = len(final_visible_emails) - emails_already_visible
                 print(f"✅ Email loading complete: {newly_revealed} new emails revealed")
