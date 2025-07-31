@@ -15,3 +15,12 @@ class="zp_FEm_X"
 -- a company name is always like this:
 class="zp_xvo3G
 full path to it: 
+
+- industry-related buton (not unique per row but the clossest it can be!)
+zp_EcHAg zp_Eu5Qy zp_qz9Za
+element:
+<span class="zp_z4aAi">Wholesale</span>
+## selector
+#table-row-6 > div.zp_egyXf.zp_IMIiq > div > div > div > div > button > div > span
+## JS path
+document.querySelector("#table-row-6 > div.zp_egyXf.zp_IMIiq > div > div > div > div > button > div > span")

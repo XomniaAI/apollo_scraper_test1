@@ -516,20 +516,21 @@ class ApolloScraper:
         print(f"✅ STEP 4.6 COMPLETED: Fresh soup created with revealed emails")
         return fresh_soup
 
-    # STEP 5: Extract contact data from person rows (updated for emails)
+    # STEP 5: Extract contact data from person rows (updated for emails and industry)
     def step5_extract_contact_data(self, person_rows):
-        '''STEP 5: Extract names, job titles, companies, and emails from person rows.
+        '''STEP 5: Extract names, job titles, companies, emails, and industry from person rows.
         
         Input: person_rows (list) - list of BeautifulSoup elements for each person
-        Output: contact_data (dict) - extracted contact information including emails
+        Output: contact_data (dict) - extracted contact information including emails and industry
         '''
-        print(f"\n🔄 STEP 5: Extracting Contact Data with Emails from {len(person_rows)} person rows")
+        print(f"\n🔄 STEP 5: Extracting Contact Data with Emails and Industry from {len(person_rows)} person rows")
         print("=" * 50)
         
         names = []
         job_titles = []
         companies = []
         emails = []
+        industries = []
         
         for idx, person_row in enumerate(person_rows, 1):            
             # Get all cells, but exclude the checkbox cell (has zp_xk8LG class)
@@ -540,34 +541,37 @@ class ApolloScraper:
                 print(f"  ⚠️  Person {idx}: Only {len(data_cells)} data cells found, skipping")
                 continue
             
-            # Extract data from the first 4 cells
+            # Extract data from the first 4 cells (name, job, company, email)
             name_cell = data_cells[0]
             job_title_cell = data_cells[1] 
             company_cell = data_cells[2]
-            email_cell = data_cells[3]  # NEW: Email cell
+            email_cell = data_cells[3]
             
-            # Extract name from first cell
+            # Extract industry cell (has unique class zp_IMIiq)
+            industry_cell = person_row.find('div', {'role': 'cell', 'class': lambda x: x and 'zp_IMIiq' in x})
+            
+            # Extract all data
             name = self._extract_name_from_cell(name_cell)
             names.append(name)
             
-            # Extract job title from second cell
             job_title = self._extract_job_title_from_cell(job_title_cell)
             job_titles.append(job_title)
             
-            # Extract company from third cell
             company = self._extract_company_from_cell(company_cell)
             companies.append(company)
             
-            # Extract email from fourth cell
             email = self._extract_email_from_cell(email_cell)
             emails.append(email)
             
-            print(f"  ✅ Person {idx}: {name} | {job_title} | {company} | {email}")
+            industry = self._extract_industry_from_cell(industry_cell) if industry_cell else "No industry found"
+            industries.append(industry)
+            
+            print(f"  ✅ Person {idx}: {name} | {job_title} | {company} | {email} | {industry}")
         
-        # Create structured contact data including emails
-        contact_data = self._create_structured_data(names, job_titles, companies, emails)
+        # Create structured contact data including emails and industry
+        contact_data = self._create_structured_data(names, job_titles, companies, emails, industries)
         
-        print(f"✅ STEP 5 COMPLETED: Extracted data for {len(names)} contacts with emails")
+        print(f"✅ STEP 5 COMPLETED: Extracted data for {len(names)} contacts with emails and industry")
         return contact_data
 
     def _extract_name_from_cell(self, name_cell):
@@ -670,10 +674,39 @@ class ApolloScraper:
         except Exception as e:
             return f"Error extracting email: {e}"
     
-    def _create_structured_data(self, names, job_titles, companies, emails):
+    def _extract_industry_from_cell(self, industry_cell):
+        """Extract industry from the industry cell using the exact pattern - only first industry from button."""
+        try:
+            if not industry_cell:
+                return "No industry found"
+            
+            # Look for the container with class zp_EcHAg zp_Eu5Qy zp_qz9Za
+            container = industry_cell.find('div', class_='zp_EcHAg zp_Eu5Qy zp_qz9Za')
+            if not container:
+                return "No industry container found"
+            
+            # Find the FIRST button with class zp_NbJqo zp_FDc6z (only visible industry)
+            first_button = container.find('button', class_='zp_NbJqo zp_FDc6z')
+            if not first_button:
+                return "No industry button found"
+            
+            # Inside the button, find the span with class zp_z4aAi containing the industry text
+            industry_span = first_button.find('span', class_='zp_z4aAi')
+            if industry_span:
+                industry_text = industry_span.get_text(strip=True)
+                if industry_text:
+                    return industry_text
+            
+            return "No industry text found"
+            
+        except Exception as e:
+            print(f"    ⚠️  Error extracting industry: {e}")
+            return "Unknown Industry"
+
+    def _create_structured_data(self, names, job_titles, companies, emails, industries):
    
         # Determine max length
-        max_length = max(len(names), len(job_titles), len(companies), len(emails))
+        max_length = max(len(names), len(job_titles), len(companies), len(emails), len(industries))
         
         if max_length == 0:
             print("⚠️  No contact data found!")
@@ -684,13 +717,15 @@ class ApolloScraper:
         job_titles.extend([''] * (max_length - len(job_titles)))
         companies.extend([''] * (max_length - len(companies)))
         emails.extend([''] * (max_length - len(emails)))
+        industries.extend([''] * (max_length - len(industries)))
         
         # Create structured data
         contact_data = {
             'Full Name': names,
             'Job Title': job_titles,
             'Company': companies,
-            'Email': emails
+            'Email': emails,
+            'Industry': industries
         }
         
         return contact_data
@@ -768,6 +803,120 @@ class ApolloScraper:
             print(f"❌ STEP 7 FAILED: {e}")
             return False
 
+    # STEP 4.4: Accept job change suggestions before email clicking
+    def step4_4_accept_job_change_suggestions(self, page_num):
+        '''STEP 4.4: Find and accept all job change suggestions on the page.
+        
+        Input: page_num (int) - current page number for logging
+        Output: success (bool) - whether suggestion acceptance completed successfully
+        '''
+        print(f"\n🔄 STEP 4.4: Accepting Job Change Suggestions")
+        print("=" * 50)
+        
+        suggestions_found = 0
+        suggestions_accepted = 0
+        
+        try:
+            # Find all update containers indicating job changes (both classes must be present)
+            update_containers = self.driver.find_elements(By.CSS_SELECTOR, 'div.zp_rFWQI.zp_c6PSX')
+            suggestions_found = len(update_containers)
+            
+            if suggestions_found == 0:
+                print("ℹ️  No job change suggestions found on this page")
+                return True
+            
+            print(f"📋 Found {suggestions_found} job change suggestions to process")
+            
+            # Process each suggestion
+            for i, container in enumerate(update_containers, 1):
+                try:
+                    print(f"  🔄 Processing suggestion {i}/{suggestions_found}")
+                    
+                    # STEP 1: Find and click the "Accept update" button
+                    accept_button = container.find_element(By.CSS_SELECTOR, 'button[aria-label="Accept update"]')
+                    if not accept_button:
+                        print(f"    ⚠️  No accept button found for suggestion {i}")
+                        continue
+                    
+                    # Click the accept button
+                    self.driver.execute_script("arguments[0].click();", accept_button)
+                    print(f"    ✅ Clicked accept button for suggestion {i}")
+                    
+                    # Human-like delay after clicking accept
+                    self.human_like_delay(1, 2)
+                    
+                    # STEP 2: Handle first popup (Update Contact form)
+                    if self._handle_first_job_change_popup(i):
+                        # Human-like delay between popups
+                        self.human_like_delay(0.5, 1.5)
+                        
+                        # STEP 3: Handle second popup (Warning dialog)
+                        if self._handle_second_job_change_popup(i):
+                            suggestions_accepted += 1
+                            print(f"    ✅ Successfully accepted suggestion {i}")
+                            
+                            # Longer delay after completing full suggestion acceptance
+                            self.human_like_delay(2, 4)
+                        else:
+                            print(f"    ❌ Failed to handle second popup for suggestion {i}")
+                    else:
+                        print(f"    ❌ Failed to handle first popup for suggestion {i}")
+                        
+                except Exception as e:
+                    print(f"    ❌ Error processing suggestion {i}: {e}")
+                    continue
+            
+            print(f"📊 Job change suggestions processed: {suggestions_accepted}/{suggestions_found} accepted")
+            print(f"✅ STEP 4.4 COMPLETED: Job change suggestions handled")
+            return True
+            
+        except Exception as e:
+            print(f"❌ STEP 4.4 FAILED: {e}")
+            return False
+    
+    def _handle_first_job_change_popup(self, suggestion_num):
+        """Handle the first popup (Update Contact form) that appears after clicking accept."""
+        try:
+            # Wait for the popup to appear
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Find the submit button with exact class "zp-button zp_GGHzP" and type="submit"
+            submit_button = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[type="submit"].zp-button.zp_GGHzP:not(.zp_PLp2D)'))
+            )
+            
+            # Click the submit button
+            self.driver.execute_script("arguments[0].click();", submit_button)
+            print(f"    ✅ Clicked submit button in first popup for suggestion {suggestion_num}")
+            return True
+            
+        except Exception as e:
+            print(f"    ⚠️  First popup handling failed for suggestion {suggestion_num}: {e}")
+            return False
+    
+    def _handle_second_job_change_popup(self, suggestion_num):
+        """Handle the second popup (Warning dialog) that appears after submitting."""
+        try:
+            # Wait for the second popup to appear
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Find the parent container with specific classes
+            parent_container = wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'div.zp_BECC7.zp_dQW2M'))
+            )
+            
+            # Find the "Yes" button within this container (exact class without additional classes)
+            yes_button = parent_container.find_element(By.CSS_SELECTOR, 'button.zp-button.zp_GGHzP:not(.zp_PLp2D)')
+            
+            # Click the "Yes" button
+            self.driver.execute_script("arguments[0].click();", yes_button)
+            print(f"    ✅ Clicked 'Yes' button in second popup for suggestion {suggestion_num}")
+            return True
+            
+        except Exception as e:
+            print(f"    ⚠️  Second popup handling failed for suggestion {suggestion_num}: {e}")
+            return False
+
     # MAIN ORCHESTRATOR: Run all steps in sequence
     def scrape_all_pages(self, num_pages_to_scrape, output_file):
 
@@ -779,6 +928,9 @@ class ApolloScraper:
                 
                 # STEP 4: Extract person rows from the soup
                 person_rows = self.step4_extract_person_rows(soup, page_num)
+                
+                # STEP 4.4: Accept job change suggestions BEFORE email clicking
+                self.step4_4_accept_job_change_suggestions(page_num)
                 
                 # STEP 4.5: Reveal ALL hidden emails by clicking all buttons at once (IMPROVED APPROACH)
                 self.step4_5_reveal_all_hidden_emails(page_num)
