@@ -331,7 +331,7 @@ class ApolloScraper:
     # STEP 3: Get raw HTML from current page and create BeautifulSoup
     def create_soup(self, page_num):
         # Wait for page to fully load
-        time.sleep(5)
+        time.sleep(9)
         # Get raw HTML source
         raw_html = self.driver.page_source
         # Create BeautifulSoup object
@@ -480,7 +480,7 @@ class ApolloScraper:
             # SINGLE COMPREHENSIVE WAIT for ALL emails to load
             if emails_clicked > 0:
                 print("⏳ Waiting for ALL emails to load (comprehensive wait)...")
-                time.sleep(4)  # Longer wait for all emails to fully load
+                time.sleep(6)  # Longer wait for all emails to fully load
                 
                 # Verify emails are loading by checking for more visible emails
                 time.sleep(0.5)
@@ -768,7 +768,7 @@ class ApolloScraper:
         try:
             print(f'Navigating from page {current_page} to page {current_page + 1}...')
             
-            time.sleep(3)  # Wait for page to fully load
+            time.sleep(8)  # Wait for page to fully load
             success = False
             
             # Strategy 1: WORKING SELECTOR - aria-label="Next" (discovered from logs)
@@ -892,10 +892,10 @@ class ApolloScraper:
             print(f"  🔄 Waiting for page to stabilize after job change...")
             
             # Wait for page to fully reload and stabilize
-            self.human_like_delay(3, 4)
+            self.human_like_delay(4, 7)
             
             # Check if we're still on the same page by looking for person rows
-            time.sleep(1)  # Additional stability wait
+            time.sleep(4)  # Additional stability wait
             
             # Verify page state
             person_rows_check = self.driver.find_elements(By.CSS_SELECTOR, 'div.zp_Uiy0R[role="row"]')
